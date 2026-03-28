@@ -1,0 +1,15 @@
+{
+  "name": "稼ぎ帳",
+  "short_name": "稼ぎ帳",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#ccff99",
+  "theme_color": "#ccff99",
+  "icons": [
+    {
+      "src": "m_icon512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
