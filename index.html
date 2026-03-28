@@ -1,11 +1,9 @@
 <!DOCTYPE html>
 <html lang="ja">
 <head>
-<link rel="manifest" href="manifest.json">
-<meta name="theme-color" content="#ccff99">
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>諭吉</title>
+<title>稼ぎ帳</title>
 
 <style>
 body {
@@ -23,7 +21,6 @@ body {
   border-radius: 12px;
 }
 
-/* タブ */
 .tab {
   display: flex;
   gap: 5px;
@@ -37,30 +34,28 @@ body {
   border-radius: 8px;
   background: #1a73e8;
   color: white;
-  font-size: 14px;
-}
-
-/* スマホ最適 */
-input {
-  width: 120px;
-  padding: 8px;
-  font-size: 16px;
 }
 
 .row {
   display: flex;
   justify-content: space-between;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+}
+
+input {
+  width: 120px;
+  padding: 8px;
+  font-size: 16px;
+  text-align: right; /* ★右寄せ */
 }
 
 button {
   width: 100%;
-  padding: 12px;
+  padding: 10px;
   border: none;
   border-radius: 8px;
   background: #1a73e8;
   color: white;
-  font-size: 16px;
   margin-top: 5px;
 }
 
@@ -70,11 +65,9 @@ button {
   background: #f0f4ff;
 }
 
-/* テーブル */
 table {
   border-collapse: collapse;
   width: 100%;
-  font-size: 14px;
 }
 
 th, td {
@@ -82,14 +75,29 @@ th, td {
   padding: 6px;
 }
 
-td.amount {
-  text-align: right;
-}
+td.amount { text-align: right; }
 
 .hidden { display:none; }
 
-.undo {
-  background:#ff9800;
+.undo { background:#ff9800; }
+
+.nav {
+  display:flex;
+  align-items:center;
+  justify-content: space-between;
+  margin:10px 0;
+}
+
+.nav button {
+  width:60px;
+  padding:6px;
+}
+
+#currentMonth {
+  flex:1;
+  text-align:center;
+  font-weight:bold;
+  white-space: nowrap;
 }
 
 .master {
@@ -100,6 +108,17 @@ td.amount {
   border-radius: 10px;
 }
 
+.master .row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.master input {
+  width: 100px;
+  text-align: right;
+  margin-left: auto; /* ★これがポイント */
+}
 </style>
 </head>
 
@@ -113,7 +132,6 @@ td.amount {
   <button onclick="showTab('monthly')">月別集計</button>
 </div>
 
-<!-- 計算 -->
 <div id="calc">
 
 <h2>バック計算</h2>
@@ -142,21 +160,32 @@ td.amount {
 
 <div class="row">日付 <input type="date" id="saveDate"></div>
 <button onclick="saveData()">保存</button>
+
 <div class="master">
-  <strong>▼ マスタ金額</strong><br><br>
-  40分：9,500円<br>
-  60分：14,000円<br>
-  80分：18,000円<br>
-  100分：24,000円<br>
-  120分：31,000円<br><br>
-  指名：4,000円<br>
-  オプション：1,000円
-</div>
+<strong>▼ マスタ金額</strong><br><br>
+
+<div class="row">40分 <input type="number" id="m40" value="9500"></div>
+<div class="row">60分 <input type="number" id="m60" value="14000"></div>
+<div class="row">80分 <input type="number" id="m80" value="18000"></div>
+<div class="row">100分 <input type="number" id="m100" value="24000"></div>
+<div class="row">120分 <input type="number" id="m120" value="31000"></div>
+
+<br>
+
+<div class="row">指名 <input type="number" id="mShimei" value="4000"></div>
+<div class="row">オプション <input type="number" id="mOption" value="1000"></div>
 </div>
 
-<!-- 明細 -->
+</div>
+
 <div id="list" class="hidden">
 <h2>明細</h2>
+
+<div class="nav">
+  <button onclick="changeMonth(-1)">＜</button>
+  <div id="currentMonth"></div>
+  <button onclick="changeMonth(1)">＞</button>
+</div>
 
 <table>
 <thead>
@@ -166,13 +195,9 @@ td.amount {
 </table>
 
 <button class="undo hidden" id="undoBtn" onclick="undoDelete()">削除を取り消す</button>
-
-<!-- CSV -->
 <button onclick="exportCSV()">CSVエクスポート</button>
-
 </div>
 
-<!-- 月別 -->
 <div id="monthly" class="hidden">
 <h2>月別集計</h2>
 <canvas id="chart"></canvas>
@@ -189,30 +214,31 @@ td.amount {
 
 <script>
 
-let lastDeleted = null;
+let lastDeleted=null;
+let viewMonth=new Date();
 
 function formatYen(num){
-  return "¥" + Number(num).toLocaleString();
+  return "¥"+Number(num).toLocaleString();
 }
 
 function calculate(){
   let base =
-    (c40.value||0)*9500 +
-    (c60.value||0)*14000 +
-    (c80.value||0)*18000 +
-    (c100.value||0)*24000 +
-    (c120.value||0)*31000 +
-    (shimei.value||0)*4000 +
-    (option.value||0)*1000;
+    (c40.value||0)*m40.value +
+    (c60.value||0)*m60.value +
+    (c80.value||0)*m80.value +
+    (c100.value||0)*m100.value +
+    (c120.value||0)*m120.value +
+    (shimei.value||0)*mShimei.value +
+    (option.value||0)*mOption.value;
 
-  let exp = Math.floor((base*0.05)/500)*500;
+  let exp=Math.floor((base*0.05)/500)*500;
   if(exp>5000) exp=5000;
 
-  let final = base - exp + Number(adjust.value||0);
+  let final=base-exp+Number(adjust.value||0);
 
-  baseTotal.innerText = formatYen(base);
-  expense.innerText = formatYen(exp);
-  finalTotal.innerText = formatYen(final);
+  baseTotal.innerText=formatYen(base);
+  expense.innerText=formatYen(exp);
+  finalTotal.innerText=formatYen(final);
 
   updateMonthTotal();
 }
@@ -222,145 +248,142 @@ document.querySelectorAll("input").forEach(i=>{
 });
 
 function saveData(){
-  const data = JSON.parse(localStorage.getItem("data")||"[]");
-  const date = saveDate.value;
-  const amount = Number(finalTotal.innerText.replace(/[^0-9]/g,''));
+  const data=JSON.parse(localStorage.getItem("data")||"[]");
+  const date=saveDate.value;
+  const amount=Number(finalTotal.innerText.replace(/[^0-9]/g,''));
 
-  const index = data.findIndex(d => d.date === date);
-
-  if(index >= 0){
-    data[index].amount = amount;
-  } else {
-    data.push({date, amount});
-  }
+  const idx=data.findIndex(d=>d.date===date);
+  if(idx>=0){data[idx].amount=amount;}
+  else{data.push({date,amount});}
 
   localStorage.setItem("data",JSON.stringify(data));
-  alert("保存しました");
 
-  loadList();
-  loadMonthly();
-  updateMonthTotal();
+  loadList();loadMonthly();updateMonthTotal();
 }
 
 function loadList(){
-  const data = JSON.parse(localStorage.getItem("data")||"[]");
+  const data=JSON.parse(localStorage.getItem("data")||"[]");
 
-  detailList.innerHTML = data.map((d,i)=>`
+  const ym=viewMonth.toISOString().slice(0,7);
+  currentMonth.innerText=ym;
+
+  const filtered=data
+    .map((d,i)=>({...d,index:i}))
+    .filter(d=>d.date.startsWith(ym))
+    .sort((a,b)=>a.date.localeCompare(b.date));
+
+  detailList.innerHTML=filtered.map(d=>`
     <tr>
       <td>${d.date}</td>
       <td class="amount">${formatYen(d.amount)}</td>
-      <td><button onclick="deleteData(${i})">削除</button></td>
+      <td><button onclick="deleteData(${d.index})">削除</button></td>
     </tr>
   `).join("");
 }
 
-function deleteData(index){
-  const data = JSON.parse(localStorage.getItem("data")||"[]");
-  if(!confirm("削除しますか？")) return;
+function changeMonth(diff){
+  viewMonth.setMonth(viewMonth.getMonth()+diff);
+  loadList();
+}
 
-  lastDeleted = { ...data[index], index };
+function deleteData(index){
+  const data=JSON.parse(localStorage.getItem("data")||"[]");
+
+  if(!confirm("削除しますか？"))return;
+
+  lastDeleted={...data[index],index};
   data.splice(index,1);
 
   localStorage.setItem("data",JSON.stringify(data));
-
   undoBtn.classList.remove("hidden");
 
-  loadList();
-  loadMonthly();
-  updateMonthTotal();
+  loadList();loadMonthly();updateMonthTotal();
 }
 
 function undoDelete(){
-  if(!lastDeleted) return;
+  if(!lastDeleted)return;
 
-  const data = JSON.parse(localStorage.getItem("data")||"[]");
+  const data=JSON.parse(localStorage.getItem("data")||"[]");
   data.splice(lastDeleted.index,0,lastDeleted);
 
   localStorage.setItem("data",JSON.stringify(data));
 
-  lastDeleted = null;
+  lastDeleted=null;
   undoBtn.classList.add("hidden");
 
-  loadList();
-  loadMonthly();
-  updateMonthTotal();
+  loadList();loadMonthly();updateMonthTotal();
 }
 
-/* CSV出力 */
+/* ★CSV昇順 */
 function exportCSV(){
-  const data = JSON.parse(localStorage.getItem("data")||"[]");
+  const data=JSON.parse(localStorage.getItem("data")||"[]");
 
-  let csv = "日付,金額\n";
-  data.forEach(d=>{
-    csv += `${d.date},${d.amount}\n`;
-  });
+  const sorted = data.sort((a,b)=>a.date.localeCompare(b.date));
 
-  const blob = new Blob([csv], {type:"text/csv"});
-  const url = URL.createObjectURL(blob);
+  let csv="日付,金額\n";
+  sorted.forEach(d=>csv+=`${d.date},${d.amount}\n`);
 
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "data.csv";
+  const blob=new Blob([csv]);
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="data.csv";
   a.click();
 }
 
 function updateMonthTotal(){
-  const data = JSON.parse(localStorage.getItem("data")||"[]");
-  const now = new Date().toISOString().slice(0,7);
+  const data=JSON.parse(localStorage.getItem("data")||"[]");
+  const now=new Date().toISOString().slice(0,7);
   let sum=0;
-
-  data.forEach(d=>{
-    if(d.date.startsWith(now)) sum+=d.amount;
-  });
-
-  monthTotal.innerText = formatYen(sum);
+  data.forEach(d=>{if(d.date.startsWith(now))sum+=d.amount;});
+  monthTotal.innerText=formatYen(sum);
 }
 
 function loadMonthly(){
-  const data = JSON.parse(localStorage.getItem("data")||"[]");
-  const map = {};
+  const data=JSON.parse(localStorage.getItem("data")||"[]");
+  const map={};
 
   data.forEach(d=>{
-    const m = d.date.slice(0,7);
-    map[m] = (map[m]||0)+d.amount;
+    const m=d.date.slice(0,7);
+    map[m]=(map[m]||0)+d.amount;
   });
 
-  monthlyList.innerHTML = Object.entries(map)
-    .map(([k,v])=>`
-      <tr>
-        <td>${k}</td>
-        <td class="amount">${formatYen(v)}</td>
-      </tr>
-    `).join("");
+  const sorted=Object.entries(map).sort((a,b)=>a[0].localeCompare(b[0]));
 
-  drawChart(map);
+  monthlyList.innerHTML=sorted.map(([k,v])=>`
+    <tr>
+      <td>${k}</td>
+      <td class="amount">${formatYen(v)}</td>
+    </tr>
+  `).join("");
+
+  drawChart(Object.fromEntries(sorted));
 }
 
 function drawChart(map){
-  const canvas = document.getElementById("chart");
-  const ctx = canvas.getContext("2d");
-  canvas.width = 320;
-  canvas.height = 200;
+  const canvas=document.getElementById("chart");
+  const ctx=canvas.getContext("2d");
+  canvas.width=320;
+  canvas.height=200;
 
   ctx.clearRect(0,0,320,200);
 
-  const keys = Object.keys(map);
-  const values = Object.values(map);
-  const max = Math.max(...values,1);
+  const keys=Object.keys(map);
+  const values=Object.values(map);
+  const max=Math.max(...values,1);
 
-  ctx.fillStyle = "#ccff99";
+  ctx.fillStyle="#ccff99";
 
   keys.forEach((k,i)=>{
-    const x = i*40;
-    const h = (values[i]/max)*150;
+    const x=i*40;
+    const h=(values[i]/max)*150;
 
     ctx.fillRect(x,180-h,25,h);
 
-    ctx.fillStyle = "#000";
-    ctx.fillText(formatYen(values[i]), x, 170-h);
+    ctx.fillStyle="#000";
+    ctx.fillText((values[i]/10000).toFixed(1)+"万",x,170-h);
     ctx.fillText(k,x,195);
 
-    ctx.fillStyle = "#ccff99";
+    ctx.fillStyle="#ccff99";
   });
 }
 
@@ -374,8 +397,7 @@ function showTab(id){
   if(id==="monthly") loadMonthly();
 }
 
-saveDate.value = new Date().toISOString().split("T")[0];
-
+saveDate.value=new Date().toISOString().split("T")[0];
 calculate();
 
 </script>
