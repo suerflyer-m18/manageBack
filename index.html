@@ -1,0 +1,384 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#ccff99">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>諭吉</title>
+
+<style>
+body {
+  font-family: "Courier New", monospace;
+  margin: 0;
+  padding: 10px;
+  background: #ccff99;
+}
+
+.container {
+  max-width: 480px;
+  margin: auto;
+  background: white;
+  padding: 15px;
+  border-radius: 12px;
+}
+
+/* タブ */
+.tab {
+  display: flex;
+  gap: 5px;
+  margin-bottom: 10px;
+}
+
+.tab button {
+  flex: 1;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  background: #1a73e8;
+  color: white;
+  font-size: 14px;
+}
+
+/* スマホ最適 */
+input {
+  width: 120px;
+  padding: 8px;
+  font-size: 16px;
+}
+
+.row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+button {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  background: #1a73e8;
+  color: white;
+  font-size: 16px;
+  margin-top: 5px;
+}
+
+.result {
+  margin-top: 20px;
+  padding: 10px;
+  background: #f0f4ff;
+}
+
+/* テーブル */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 14px;
+}
+
+th, td {
+  border: 1px solid #ccc;
+  padding: 6px;
+}
+
+td.amount {
+  text-align: right;
+}
+
+.hidden { display:none; }
+
+.undo {
+  background:#ff9800;
+}
+
+.master {
+  margin-top: 30px;
+  font-size: 14px;
+  background: #fafafa;
+  padding: 15px;
+  border-radius: 10px;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="container">
+
+<div class="tab">
+  <button onclick="showTab('calc')">バック計算</button>
+  <button onclick="showTab('list')">明細</button>
+  <button onclick="showTab('monthly')">月別集計</button>
+</div>
+
+<!-- 計算 -->
+<div id="calc">
+
+<h2>バック計算</h2>
+
+<div class="row">40分 <input type="number" id="c40"></div>
+<div class="row">60分 <input type="number" id="c60"></div>
+<div class="row">80分 <input type="number" id="c80"></div>
+<div class="row">100分 <input type="number" id="c100"></div>
+<div class="row">120分 <input type="number" id="c120"></div>
+
+<hr>
+
+<div class="row">指名 <input type="number" id="shimei"></div>
+<div class="row">オプション <input type="number" id="option"></div>
+<div class="row">金額補正 <input type="number" id="adjust"></div>
+
+<div class="result">
+<table>
+<tr><th>項目</th><th>金額</th></tr>
+<tr><td>元合計</td><td id="baseTotal" class="amount">¥0</td></tr>
+<tr><td>雑費</td><td id="expense" class="amount">¥0</td></tr>
+<tr><td><b>最終合計</b></td><td id="finalTotal" class="amount">¥0</td></tr>
+<tr><td>当月合計</td><td id="monthTotal" class="amount">¥0</td></tr>
+</table>
+</div>
+
+<div class="row">日付 <input type="date" id="saveDate"></div>
+<button onclick="saveData()">保存</button>
+<div class="master">
+  <strong>▼ マスタ金額</strong><br><br>
+  40分：9,500円<br>
+  60分：14,000円<br>
+  80分：18,000円<br>
+  100分：24,000円<br>
+  120分：31,000円<br><br>
+  指名：4,000円<br>
+  オプション：1,000円
+</div>
+</div>
+
+<!-- 明細 -->
+<div id="list" class="hidden">
+<h2>明細</h2>
+
+<table>
+<thead>
+<tr><th>日付</th><th>金額</th><th>削除</th></tr>
+</thead>
+<tbody id="detailList"></tbody>
+</table>
+
+<button class="undo hidden" id="undoBtn" onclick="undoDelete()">削除を取り消す</button>
+
+<!-- CSV -->
+<button onclick="exportCSV()">CSVエクスポート</button>
+
+</div>
+
+<!-- 月別 -->
+<div id="monthly" class="hidden">
+<h2>月別集計</h2>
+<canvas id="chart"></canvas>
+
+<table>
+<thead>
+<tr><th>年月</th><th>金額</th></tr>
+</thead>
+<tbody id="monthlyList"></tbody>
+</table>
+</div>
+
+</div>
+
+<script>
+
+let lastDeleted = null;
+
+function formatYen(num){
+  return "¥" + Number(num).toLocaleString();
+}
+
+function calculate(){
+  let base =
+    (c40.value||0)*9500 +
+    (c60.value||0)*14000 +
+    (c80.value||0)*18000 +
+    (c100.value||0)*24000 +
+    (c120.value||0)*31000 +
+    (shimei.value||0)*4000 +
+    (option.value||0)*1000;
+
+  let exp = Math.floor((base*0.05)/500)*500;
+  if(exp>5000) exp=5000;
+
+  let final = base - exp + Number(adjust.value||0);
+
+  baseTotal.innerText = formatYen(base);
+  expense.innerText = formatYen(exp);
+  finalTotal.innerText = formatYen(final);
+
+  updateMonthTotal();
+}
+
+document.querySelectorAll("input").forEach(i=>{
+  i.addEventListener("input",calculate);
+});
+
+function saveData(){
+  const data = JSON.parse(localStorage.getItem("data")||"[]");
+  const date = saveDate.value;
+  const amount = Number(finalTotal.innerText.replace(/[^0-9]/g,''));
+
+  const index = data.findIndex(d => d.date === date);
+
+  if(index >= 0){
+    data[index].amount = amount;
+  } else {
+    data.push({date, amount});
+  }
+
+  localStorage.setItem("data",JSON.stringify(data));
+  alert("保存しました");
+
+  loadList();
+  loadMonthly();
+  updateMonthTotal();
+}
+
+function loadList(){
+  const data = JSON.parse(localStorage.getItem("data")||"[]");
+
+  detailList.innerHTML = data.map((d,i)=>`
+    <tr>
+      <td>${d.date}</td>
+      <td class="amount">${formatYen(d.amount)}</td>
+      <td><button onclick="deleteData(${i})">削除</button></td>
+    </tr>
+  `).join("");
+}
+
+function deleteData(index){
+  const data = JSON.parse(localStorage.getItem("data")||"[]");
+  if(!confirm("削除しますか？")) return;
+
+  lastDeleted = { ...data[index], index };
+  data.splice(index,1);
+
+  localStorage.setItem("data",JSON.stringify(data));
+
+  undoBtn.classList.remove("hidden");
+
+  loadList();
+  loadMonthly();
+  updateMonthTotal();
+}
+
+function undoDelete(){
+  if(!lastDeleted) return;
+
+  const data = JSON.parse(localStorage.getItem("data")||"[]");
+  data.splice(lastDeleted.index,0,lastDeleted);
+
+  localStorage.setItem("data",JSON.stringify(data));
+
+  lastDeleted = null;
+  undoBtn.classList.add("hidden");
+
+  loadList();
+  loadMonthly();
+  updateMonthTotal();
+}
+
+/* CSV出力 */
+function exportCSV(){
+  const data = JSON.parse(localStorage.getItem("data")||"[]");
+
+  let csv = "日付,金額\n";
+  data.forEach(d=>{
+    csv += `${d.date},${d.amount}\n`;
+  });
+
+  const blob = new Blob([csv], {type:"text/csv"});
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "data.csv";
+  a.click();
+}
+
+function updateMonthTotal(){
+  const data = JSON.parse(localStorage.getItem("data")||"[]");
+  const now = new Date().toISOString().slice(0,7);
+  let sum=0;
+
+  data.forEach(d=>{
+    if(d.date.startsWith(now)) sum+=d.amount;
+  });
+
+  monthTotal.innerText = formatYen(sum);
+}
+
+function loadMonthly(){
+  const data = JSON.parse(localStorage.getItem("data")||"[]");
+  const map = {};
+
+  data.forEach(d=>{
+    const m = d.date.slice(0,7);
+    map[m] = (map[m]||0)+d.amount;
+  });
+
+  monthlyList.innerHTML = Object.entries(map)
+    .map(([k,v])=>`
+      <tr>
+        <td>${k}</td>
+        <td class="amount">${formatYen(v)}</td>
+      </tr>
+    `).join("");
+
+  drawChart(map);
+}
+
+function drawChart(map){
+  const canvas = document.getElementById("chart");
+  const ctx = canvas.getContext("2d");
+  canvas.width = 320;
+  canvas.height = 200;
+
+  ctx.clearRect(0,0,320,200);
+
+  const keys = Object.keys(map);
+  const values = Object.values(map);
+  const max = Math.max(...values,1);
+
+  ctx.fillStyle = "#ccff99";
+
+  keys.forEach((k,i)=>{
+    const x = i*40;
+    const h = (values[i]/max)*150;
+
+    ctx.fillRect(x,180-h,25,h);
+
+    ctx.fillStyle = "#000";
+    ctx.fillText(formatYen(values[i]), x, 170-h);
+    ctx.fillText(k,x,195);
+
+    ctx.fillStyle = "#ccff99";
+  });
+}
+
+function showTab(id){
+  calc.classList.add("hidden");
+  list.classList.add("hidden");
+  monthly.classList.add("hidden");
+  document.getElementById(id).classList.remove("hidden");
+
+  if(id==="list") loadList();
+  if(id==="monthly") loadMonthly();
+}
+
+saveDate.value = new Date().toISOString().split("T")[0];
+
+calculate();
+
+</script>
+
+</body>
+</html>
